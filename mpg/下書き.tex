@@ -1,0 +1,138 @@
+\documentclass{jarticle}
+\usepackage{multicol}
+\usepackage{amsmath}
+\usepackage{comment}
+\usepackage[dvipdfmx]{graphicx}
+\usepackage[top=30truemm,bottom=50truemm,left=25truemm,right=25truemm]{geometry}
+
+%\setlength\textfloatsep{0pt}
+%\setlength\intextsep{0pt}
+
+\makeatletter
+\newenvironment{tablehere}
+  {\def\@captype{table}}
+  {}
+
+\newenvironment{figurehere}
+  {\def\@captype{figure}}
+  {}
+\makeatother
+
+\title{\vspace{-3.0cm}自動車の燃費に対する回帰}
+\author{Yota Nonaka}
+\date{}
+
+\newtheorem{theo}{定理}[section]
+\newtheorem{defi}{定義}[section]
+\newtheorem{lemm}{補題}[section]
+
+\begin{document}
+\maketitle
+\section{Explanation of the data}
+\subsection{Source}
+This dataset was taken from the StatLib library which is maintained at Carnegie Mellon University. The dataset was used in the 1983 American Statistical Association Exposition.
+\subsection{Data set information}
+mpg(miles per gallon)とは、アメリカやイギリスで用いられている燃費の指標である。1ガロン（約4.55リッター）の燃料で何マイル（1マイル≒1.6km）を走ることができるのかを表したもので、この値が大きいほど燃費が良いと言える。\\
+この実験の目標は$3$つの離散変数と$5$つの連続変数から、燃費mpgの値を予測することである。
+
+\subsection{Attribute Information}
+\begin{enumerate}
+\item mpg: continuous
+\item cylinders: multi-valued discrete
+\item displacement: continuous
+\item horsepower: continuous
+\item weight: continuous
+\item acceleration: continuous
+\item model year: multi-valued discrete
+\item origin: multi-valued discrete
+\item car name: string (unique for each instance)
+\end{enumerate}
+
+The purpose of this survey is to estimate mpg using data from (2) to (9).
+Note that data (9) is not used for simplicity.
+
+\section{Methods}
+この回帰を実装する際，二つの異なる手法を用いた。
+一つは線形回帰であり，もう一つはガウス過程回帰である。
+また線形回帰の際には三種類の基底関数を利用し、それらを比較した。
+\subsection{Linear Regression}
+$n$番目のデータ${\bf x}_n$の$k$番目の成分はパラメータ$\alpha_k$を用いて$\phi_k ( ({\bf x}_n)_k ;\alpha_k)$のように変形されるものとした。
+ここで$\phi$が基底関数である。
+また$k=0$のときのみ$\phi_0 = 1$なる基底関数を用いることにした。
+データの予測値は$y_n = \sum_k w_k \phi_k ( ({\bf x}_n )_k ; \alpha_k)$となる。
+平均二乗誤差を最小化するという条件から，最適な重み${\bf w}$とパラメータ${\bf \alpha}$を求めることが目標である。
+
+\subsubsection{恒等関数}
+基底関数として恒等関数を用いたとき，$\phi_k ({\bf x}) = x_k$である。
+よって$\lambda$というハイパーパラメータを用いると，計画行列$X$に対して
+\[
+{\bf w} = (X^T X+\lambda)^{-1} X^T {\bf y}
+\]
+という式によって最適な重みパラメータを計算することが出来る。
+正則化のためのハイパーパラメータ$\lambda$は，ほかの基底関数を用いるときにも使用する。
+
+\subsubsection{シグモイド関数}
+基底関数としてシグモイド関数を用いると，$\phi_k ({\bf x}) = \dfrac{1-e^{-x_k+\alpha_k}}{1+e^{-x_k+\alpha_k}}$である。
+よって計画行列$\Phi$に対して
+\[
+{\bf w} = (\Phi^T \Phi+\lambda)^{-1} \Phi^T {\bf y}
+\]
+を用いると${\bf w}$を求められる。
+また${\bf \alpha}$についても同様の計算をすると，損失関数$L$の微分は
+\[
+\dfrac{\partial L}{\partial \alpha_k} = 2 w_k \sum_n \dfrac{\partial \phi_k}{\partial \alpha_k} ({\bf x}_n) \left[ -y_n+\sum_j \phi_j ({\bf x}_n) w_j \right]
+\]
+という式で与えられるため，適当な初期条件を与えることによって最適化できる。
+シグモイド関数を基底関数として利用する場合，$\dfrac{\partial \phi_k}{\partial \alpha_k} = \dfrac{1}{2}(\phi_k^2-1)$という関係が有用である。
+
+\subsubsection{ガウス関数}
+ガウス関数を基底関数として選んだとき，シグモイド関数とまったく同様の手順でパラメータを最適化することが出来る。
+基底関数は$\phi_k ({\bf x}) = \exp \left[ -\dfrac{(x_k-\mu_k)^2}{2 \sigma_k^2} \right]$であるから、
+\begin{eqnarray*}
+\dfrac{\partial \phi_k}{\partial \mu_k} &=& \dfrac{x_k-\mu_k}{\sigma_k^2} \phi_k \\
+\dfrac{\partial \phi_k}{\partial \sigma_k} &=& \dfrac{(x_k-\mu_k)^2}{\sigma_k^3} \phi_k
+\end{eqnarray*}
+という関係を利用することができる。
+
+\subsection{ガウス過程回帰}
+前述した線形回帰の基底関数の取り方では，データの各成分同士の相関などを考慮していない。
+しかし基底関数に相関を取り入れると，データの成分の組み合わせの数が大きすぎるという問題が生じうる。
+そこで基底関数を明示的に指定しないガウス過程回帰を利用することにした。
+利用したカーネルはガウスカーネルであり，カーネルに含まれるハイパーパラメータは検証用データでチューニングした。\\
+学習用データ${\bf x}_n$と正解ラベル${\bf y}$が与えられたとき，データ${\bf x}^*$に対する予測値は$y^* = {\bf k}_{*}^{T} K^{-1} {\bf y}$となる。
+ここで$({\bf k}_{*})_n = k({\bf x}^*,{\bf x}_n)$と$K_(n n') = k({\bf x}_n,{\bf x}_{n'})$を利用した。
+
+\section{実験}
+全$392$個のデータのうち、$20 \%$をテストデータとして用いることにした。
+残りの$80 \%$のデータに関して、$5$分割交差検証を行い、$5$つの場合に対する精度の平均を計算した。
+最後に、精度が最も良いと考えられるモデルについて、テストデータを使ってその精度を確認した。
+
+\section{結果}
+それぞれのモデルによる相対誤差を比較したものを表\ref{model}に示す。
+この表から、ガウス過程回帰が最も精度の良いモデルであるということが読み取れる。
+また交差検証に対する標準偏差も小さく、安定性も保証されている。
+\begin{table}[htbp]
+\begin{center}
+\caption{モデルごとの精度の比較}
+\begin{tabular}{llll}
+Method & basis function or kernel & average of relative error & (STDEV)\\
+Linear Regression & id & 12.2\% & 1.2\% \\
+ & sigmoid &18.0\% & 6.5\% \\
+ & gaussian & 17.2\% & 7.2\% \\
+Gaussian Process & RBF &9.5\% & 1.4\% \\
+\end{tabular}
+\label{model}
+\end{center}
+\end{table}
+最後にガウス過程回帰を用いてテストデータの回帰を行ったところ、相対誤差は$8.69 \%$であった。
+テストデータに対してもよい精度を保っているため、過学習を起こしていないということも保証される。
+
+\section{結論}
+表\ref{model}より、線形関数の基底関数を比較すると、シグモイドやガウシアンよりも恒等関数のような関数形がmpgの回帰の特徴をとらえているということが出来る。
+また、恒等関数による線形回帰の重みパラメータより、データの各成分の典型的な大きさを考慮しつつ、各成分のmpgに対する寄与を調べた。このとき最も主要な寄与として、製造年はmpgに対して大きな正の効果を与えることが分かった。次に主要な寄与として、車両の重量はmpgに対して大きな負の効果を与えていた。これらは直観的にも極めて自然である。その他の寄与はこれらに対して$10\%$程度の大きさであった。\\
+またガウス過程回帰が最も精度の良いモデルになっていることから、各成分が独立な基底関数を与えるという考えでは不十分であるということも読み取れる。
+つまり基底関数の選択において、各成分の相関を考慮に入れる必要があるということである。
+ただ前述の通り、そのためには膨大な組み合わせを考慮する必要があり、データ数はそれほど大きくないため、ガウス過程は現実的な解決策であるといえるかもしれない。
+
+
+\end{document}
